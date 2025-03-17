@@ -1,0 +1,24 @@
+#rules
+A comprehensive dashboard for tracking and analyzing flight and hotel sales transactions with real-time data visualization and detailed reporting capabilities.
+
+
+
+
+
+Sales Overview Dashboard featuring monthly sales charts, recent transactions table, and total revenue summary widgets
+
+
+
+Integrated Data Management with synchronized booking system data for flight and hotel sales reports
+
+
+
+Interactive Filtering with date range selectors and drill-down functionality from monthly totals to detailed transactions
+
+
+
+Validation Rules to ensure data integrity with unique transaction IDs and positive amount values
+
+
+
+Monthly Reporting with aggregated sales data showing total amounts and transaction counts
