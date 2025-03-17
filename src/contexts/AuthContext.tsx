@@ -259,13 +259,30 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
 
   const signIn = async (email: string, password: string) => {
     try {
+      // Check for placeholder URL in development
+      if (!import.meta.env.PROD && (!import.meta.env.VITE_SUPABASE_URL || import.meta.env.VITE_SUPABASE_URL.includes('placeholder-url'))) {
+        console.warn('Development mode using placeholder Supabase URL - authentication will fail');
+      }
+
       const { error } = await supabase.auth.signInWithPassword({
         email,
         password,
       });
+
+      // Handle network errors specifically
+      if (error?.message.includes('Failed to fetch')) {
+        console.error('Network error - check Supabase connection');
+        return { error: new Error('Unable to connect to authentication server') };
+      }
+
       return { error };
     } catch (error) {
       console.error("Error signing in:", error);
+      // Add retry logic for network errors
+      if (error instanceof Error && error.message.includes('Network')) {
+        console.log('Attempting network error retry...');
+        return await signIn(email, password);
+      }
       return { error };
     }
   };
