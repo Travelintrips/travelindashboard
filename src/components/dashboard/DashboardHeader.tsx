@@ -51,11 +51,12 @@ const DashboardHeader = ({
     `https://api.dicebear.com/7.x/avataaars/svg?seed=${displayName}`;
   const displayRole = userRole || authRole || "Tamu";
 
-  const [selectedRole, setSelectedRole] = useState(displayRole);
+  // Remove the local state and directly use displayRole
+  // const [selectedRole, setSelectedRole] = useState(displayRole);
 
   // Update auth context when role changes
   const handleRoleChange = (role: string) => {
-    setSelectedRole(role);
+    // setSelectedRole(role);
     setUserRole(role);
   };
 
@@ -122,7 +123,7 @@ const DashboardHeader = ({
                 variant="ghost"
                 className="h-8 px-2 py-1 text-sm bg-gray-50 hover:bg-gray-100 flex items-center gap-1"
               >
-                <span>Peran: {selectedRole}</span>
+                <span>Peran: {displayRole}</span>
                 <ChevronDown className="h-4 w-4" />
               </Button>
             </DropdownMenuTrigger>
