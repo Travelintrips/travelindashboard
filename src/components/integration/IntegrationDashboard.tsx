@@ -8,7 +8,12 @@ import { FileText, BarChart3, Settings, RefreshCw } from "lucide-react";
 import IntegrationSettings from "./IntegrationSettings";
 import SyncTransactions from "./SyncTransactions";
 import { SyncResult } from "@/types/integration";
-import { syncTransactions } from "@/services/integrationService";
+import {
+  syncTransactions,
+  fetchIntegrationData,
+} from "@/services/integrationService";
+import IntegrationLoading from "./IntegrationLoading";
+import IntegrationErrorBoundary from "./IntegrationErrorBoundary";
 
 interface IntegrationDashboardProps {
   userName?: string;
@@ -23,6 +28,8 @@ const IntegrationDashboard = ({
   const [lastSyncResult, setLastSyncResult] = useState<SyncResult | null>(null);
   const [syncFrequency, setSyncFrequency] = useState("manual");
   const [syncInterval, setSyncInterval] = useState<number | null>(null);
+  const [isLoading, setIsLoading] = useState(true);
+  const [error, setError] = useState<Error | null>(null);
 
   const handleSyncComplete = (result: SyncResult) => {
     setLastSyncResult(result);
@@ -63,144 +70,175 @@ const IntegrationDashboard = ({
     // and "manual" means no automatic sync
   };
 
-  // Clean up interval on component unmount
+  const loadPendingTransactions = async () => {
+    try {
+      setIsLoading(true);
+      await fetchIntegrationData();
+      setIsLoading(false);
+    } catch (err) {
+      console.error("Error loading integration data:", err);
+      setError(err instanceof Error ? err : new Error("Failed to load data"));
+      setIsLoading(false);
+    }
+  };
+
+  // Load data on component mount
   useEffect(() => {
+    loadPendingTransactions();
+
     return () => {
       if (syncInterval) {
         window.clearInterval(syncInterval);
       }
     };
-  }, [syncInterval]);
+  }, []);
+
+  if (isLoading) {
+    return <IntegrationLoading />;
+  }
+
+  if (error) {
+    return (
+      <IntegrationErrorBoundary>
+        <div>Error loading integration data: {error.message}</div>
+      </IntegrationErrorBoundary>
+    );
+  }
 
   return (
-    <div className="min-h-screen bg-gray-50">
-      {/* Dashboard Header */}
-      <DashboardHeader
-        title="Integrasi Sistem"
-        userName={userName}
-        userAvatar={userAvatar}
-      />
+    <IntegrationErrorBoundary>
+      <div className="min-h-screen bg-gray-50">
+        {/* Dashboard Header */}
+        <DashboardHeader
+          title="Integrasi Sistem"
+          userName={userName}
+          userAvatar={userAvatar}
+        />
 
-      {/* Main Content */}
-      <main className="container mx-auto px-4 py-6">
-        <div className="flex justify-between items-center mb-6">
-          <h2 className="text-2xl font-bold">
-            Integrasi Penjualan & Akuntansi
-          </h2>
-          <div className="flex gap-2">
-            <Link to="/sales-dashboard">
-              <Button variant="outline" className="flex items-center gap-2">
-                <BarChart3 className="h-4 w-4" />
-                Dashboard Penjualan
-              </Button>
-            </Link>
-            <Link to="/accounting">
-              <Button variant="outline" className="flex items-center gap-2">
-                <FileText className="h-4 w-4" />
-                Dashboard Akuntansi
-              </Button>
-            </Link>
+        {/* Main Content */}
+        <main className="container mx-auto px-4 py-6">
+          <div className="flex justify-between items-center mb-6">
+            <h2 className="text-2xl font-bold">
+              Integrasi Penjualan & Akuntansi
+            </h2>
+            <div className="flex gap-2">
+              <Link to="/sales-dashboard">
+                <Button variant="outline" className="flex items-center gap-2">
+                  <BarChart3 className="h-4 w-4" />
+                  Dashboard Penjualan
+                </Button>
+              </Link>
+              <Link to="/accounting">
+                <Button variant="outline" className="flex items-center gap-2">
+                  <FileText className="h-4 w-4" />
+                  Dashboard Akuntansi
+                </Button>
+              </Link>
+            </div>
           </div>
-        </div>
 
-        <div className="grid grid-cols-1 gap-6">
-          <Card className="bg-white shadow-sm">
-            <CardHeader>
-              <CardTitle className="text-lg font-medium">
-                Status Integrasi
-              </CardTitle>
-            </CardHeader>
-            <CardContent>
-              <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-                <div className="border rounded-md p-4">
-                  <div className="text-sm text-gray-500">Status Koneksi</div>
-                  <div className="text-lg font-medium flex items-center mt-1">
-                    <span className="h-2 w-2 rounded-full bg-green-500 mr-2"></span>
-                    Terhubung
+          <div className="grid grid-cols-1 gap-6">
+            <Card className="bg-white shadow-sm">
+              <CardHeader>
+                <CardTitle className="text-lg font-medium">
+                  Status Integrasi
+                </CardTitle>
+              </CardHeader>
+              <CardContent>
+                <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+                  <div className="border rounded-md p-4">
+                    <div className="text-sm text-gray-500">Status Koneksi</div>
+                    <div className="text-lg font-medium flex items-center mt-1">
+                      <span className="h-2 w-2 rounded-full bg-green-500 mr-2"></span>
+                      Terhubung
+                    </div>
                   </div>
-                </div>
-                <div className="border rounded-md p-4">
-                  <div className="text-sm text-gray-500">
-                    Sinkronisasi Terakhir
+                  <div className="border rounded-md p-4">
+                    <div className="text-sm text-gray-500">
+                      Sinkronisasi Terakhir
+                    </div>
+                    <div className="text-lg font-medium mt-1">
+                      {lastSyncResult
+                        ? new Date().toLocaleString("id-ID")
+                        : "Belum Pernah"}
+                    </div>
                   </div>
-                  <div className="text-lg font-medium mt-1">
-                    {lastSyncResult
-                      ? new Date().toLocaleString("id-ID")
-                      : "Belum Pernah"}
-                  </div>
-                </div>
-                <div className="border rounded-md p-4">
-                  <div className="text-sm text-gray-500">
-                    Status Sinkronisasi
-                  </div>
-                  <div className="text-lg font-medium flex items-center mt-1">
-                    {lastSyncResult ? (
-                      lastSyncResult.success ? (
-                        <>
-                          <span className="h-2 w-2 rounded-full bg-green-500 mr-2"></span>
-                          Sukses ({lastSyncResult.syncedCount} transaksi)
-                        </>
+                  <div className="border rounded-md p-4">
+                    <div className="text-sm text-gray-500">
+                      Status Sinkronisasi
+                    </div>
+                    <div className="text-lg font-medium flex items-center mt-1">
+                      {lastSyncResult ? (
+                        lastSyncResult.success ? (
+                          <>
+                            <span className="h-2 w-2 rounded-full bg-green-500 mr-2"></span>
+                            Sukses ({lastSyncResult.syncedCount} transaksi)
+                          </>
+                        ) : (
+                          <>
+                            <span className="h-2 w-2 rounded-full bg-amber-500 mr-2"></span>
+                            Sebagian Gagal ({lastSyncResult.syncedCount}/
+                            {lastSyncResult.syncedCount +
+                              lastSyncResult.failedCount}
+                            )
+                          </>
+                        )
                       ) : (
                         <>
-                          <span className="h-2 w-2 rounded-full bg-amber-500 mr-2"></span>
-                          Sebagian Gagal ({lastSyncResult.syncedCount}/
-                          {lastSyncResult.syncedCount +
-                            lastSyncResult.failedCount}
-                          )
+                          <span className="h-2 w-2 rounded-full bg-gray-300 mr-2"></span>
+                          Belum Disinkronkan
                         </>
-                      )
-                    ) : (
-                      <>
-                        <span className="h-2 w-2 rounded-full bg-gray-300 mr-2"></span>
-                        Belum Disinkronkan
-                      </>
-                    )}
+                      )}
+                    </div>
                   </div>
                 </div>
-              </div>
-            </CardContent>
-          </Card>
+              </CardContent>
+            </Card>
 
-          <Tabs value={activeTab} onValueChange={setActiveTab}>
-            <TabsList className="grid w-full grid-cols-2 mb-6">
-              <TabsTrigger value="sync" className="flex items-center gap-2">
-                <RefreshCw className="h-4 w-4" />
-                Sinkronisasi Transaksi
-              </TabsTrigger>
-              <TabsTrigger value="settings" className="flex items-center gap-2">
-                <Settings className="h-4 w-4" />
-                Pengaturan Integrasi
-              </TabsTrigger>
-            </TabsList>
+            <Tabs value={activeTab} onValueChange={setActiveTab}>
+              <TabsList className="grid w-full grid-cols-2 mb-6">
+                <TabsTrigger value="sync" className="flex items-center gap-2">
+                  <RefreshCw className="h-4 w-4" />
+                  Sinkronisasi Transaksi
+                </TabsTrigger>
+                <TabsTrigger
+                  value="settings"
+                  className="flex items-center gap-2"
+                >
+                  <Settings className="h-4 w-4" />
+                  Pengaturan Integrasi
+                </TabsTrigger>
+              </TabsList>
 
-            <TabsContent value="sync">
-              <SyncTransactions onSyncComplete={handleSyncComplete} />
-            </TabsContent>
+              <TabsContent value="sync">
+                <SyncTransactions onSyncComplete={handleSyncComplete} />
+              </TabsContent>
 
-            <TabsContent value="settings">
-              <IntegrationSettings
-                onSyncSettingsChange={handleSyncSettingsChange}
-              />
-            </TabsContent>
-          </Tabs>
-        </div>
-      </main>
-
-      {/* Footer */}
-      <footer className="bg-white border-t border-gray-200 py-4 px-6 mt-8">
-        <div className="container mx-auto">
-          <div className="flex justify-between items-center">
-            <p className="text-sm text-gray-500">
-              &copy; {new Date().getFullYear()} Sistem Akuntansi Indonesia.
-              Seluruh hak cipta dilindungi.
-            </p>
-            <p className="text-sm text-gray-500">
-              Terakhir diperbarui: {new Date().toLocaleDateString()}
-            </p>
+              <TabsContent value="settings">
+                <IntegrationSettings
+                  onSyncSettingsChange={handleSyncSettingsChange}
+                />
+              </TabsContent>
+            </Tabs>
           </div>
-        </div>
-      </footer>
-    </div>
+        </main>
+
+        {/* Footer */}
+        <footer className="bg-white border-t border-gray-200 py-4 px-6 mt-8">
+          <div className="container mx-auto">
+            <div className="flex justify-between items-center">
+              <p className="text-sm text-gray-500">
+                &copy; {new Date().getFullYear()} Sistem Akuntansi Indonesia.
+                Seluruh hak cipta dilindungi.
+              </p>
+              <p className="text-sm text-gray-500">
+                Terakhir diperbarui: {new Date().toLocaleDateString()}
+              </p>
+            </div>
+          </div>
+        </footer>
+      </div>
+    </IntegrationErrorBoundary>
   );
 };
 

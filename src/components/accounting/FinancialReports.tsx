@@ -1,4 +1,5 @@
-import React, { useState } from "react";
+import React, { useState, useEffect } from "react";
+import { supabase } from "@/lib/supabase";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Button } from "@/components/ui/button";
@@ -42,6 +43,64 @@ const FinancialReports = ({
       currency: "IDR",
     }).format(amount);
   };
+
+  // Financial data from database
+  const [balanceSheetData, setBalanceSheetData] = useState<any>(null);
+  const [incomeStatementData, setIncomeStatementData] = useState<any>(null);
+  const [loading, setLoading] = useState(true);
+
+  // Fetch financial data when date range changes
+  useEffect(() => {
+    const fetchFinancialData = async () => {
+      setLoading(true);
+      try {
+        if (activeTab === "balance-sheet" || !balanceSheetData) {
+          // Fetch balance sheet data
+          const { data, error } = await supabase.functions.invoke(
+            "supabase-functions-accounting-functions",
+            {
+              body: {
+                action: "getBalanceSheet",
+                data: {
+                  startDate: dateRange.from.toISOString(),
+                  endDate: dateRange.to.toISOString(),
+                },
+              },
+            },
+          );
+
+          if (error) throw error;
+          setBalanceSheetData(data);
+        }
+
+        if (activeTab === "income-statement" || !incomeStatementData) {
+          // Fetch income statement data
+          const { data, error } = await supabase.functions.invoke(
+            "supabase-functions-accounting-functions",
+            {
+              body: {
+                action: "getIncomeStatement",
+                data: {
+                  startDate: dateRange.from.toISOString(),
+                  endDate: dateRange.to.toISOString(),
+                },
+              },
+            },
+          );
+
+          if (error) throw error;
+          setIncomeStatementData(data);
+        }
+      } catch (error) {
+        console.error("Error fetching financial data:", error);
+        // We'll keep the UI as is if there's an error
+      } finally {
+        setLoading(false);
+      }
+    };
+
+    fetchFinancialData();
+  }, [activeTab, dateRange]);
 
   const handleExport = (format: string) => {
     console.log(`Exporting ${activeTab} in ${format} format`);

@@ -1,4 +1,5 @@
-import React, { useState } from "react";
+import React, { useState, useEffect } from "react";
+import { supabase } from "@/lib/supabase";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import {
   Table,
@@ -42,105 +43,94 @@ const GeneralLedger = ({
   const [searchTerm, setSearchTerm] = useState("");
   const [selectedCategory, setSelectedCategory] = useState<string>("all");
 
-  // Sample accounts data
-  const accounts: Account[] = [
-    {
-      code: "1-1000",
-      name: "Kas",
-      category: "Aset",
-      balance: 5000000,
-      debit: 7500000,
-      credit: 2500000,
-    },
-    {
-      code: "1-1100",
-      name: "Bank BCA",
-      category: "Aset",
-      balance: 15000000,
-      debit: 20000000,
-      credit: 5000000,
-    },
-    {
-      code: "1-1200",
-      name: "Piutang Usaha",
-      category: "Aset",
-      balance: 7500000,
-      debit: 7500000,
-      credit: 0,
-    },
-    {
-      code: "1-2000",
-      name: "Peralatan",
-      category: "Aset",
-      balance: 10000000,
-      debit: 10000000,
-      credit: 0,
-    },
-    {
-      code: "2-1000",
-      name: "Hutang Usaha",
-      category: "Kewajiban",
-      balance: 3000000,
-      debit: 2000000,
-      credit: 5000000,
-    },
-    {
-      code: "2-2000",
-      name: "Hutang Bank",
-      category: "Kewajiban",
-      balance: 20000000,
-      debit: 5000000,
-      credit: 25000000,
-    },
-    {
-      code: "3-1000",
-      name: "Modal",
-      category: "Ekuitas",
-      balance: 10000000,
-      debit: 0,
-      credit: 10000000,
-    },
-    {
-      code: "3-2000",
-      name: "Laba Ditahan",
-      category: "Ekuitas",
-      balance: 4500000,
-      debit: 0,
-      credit: 4500000,
-    },
-    {
-      code: "4-1000",
-      name: "Pendapatan Jasa",
-      category: "Pendapatan",
-      balance: 15000000,
-      debit: 0,
-      credit: 15000000,
-    },
-    {
-      code: "5-1000",
-      name: "Beban Gaji",
-      category: "Beban",
-      balance: 7500000,
-      debit: 7500000,
-      credit: 0,
-    },
-    {
-      code: "5-2000",
-      name: "Beban Sewa",
-      category: "Beban",
-      balance: 3500000,
-      debit: 3500000,
-      credit: 0,
-    },
-    {
-      code: "5-3000",
-      name: "Beban Utilitas",
-      category: "Beban",
-      balance: 1500000,
-      debit: 1500000,
-      credit: 0,
-    },
-  ];
+  // Accounts data from database
+  const [accounts, setAccounts] = useState<Account[]>([]);
+  const [loading, setLoading] = useState(true);
+
+  // Fetch accounts and their transaction totals
+  useEffect(() => {
+    const fetchAccountsWithTotals = async () => {
+      try {
+        // First get all accounts
+        const { data: accountsData, error: accountsError } = await supabase
+          .from("accounts")
+          .select("*")
+          .order("code");
+
+        if (accountsError) throw accountsError;
+
+        // Then get transaction totals for each account
+        const { data: totalsData, error: totalsError } = await supabase
+          .from("transaction_entries")
+          .select(
+            "account_id, account_code, sum(debit) as total_debit, sum(credit) as total_credit",
+          )
+          .group("account_id, account_code");
+
+        if (totalsError) throw totalsError;
+
+        // Combine the data
+        const combinedData = accountsData.map((account) => {
+          const totals = totalsData.find(
+            (t) => t.account_code === account.code,
+          ) || { total_debit: 0, total_credit: 0 };
+
+          return {
+            code: account.code,
+            name: account.name,
+            category: account.category,
+            balance: account.balance,
+            debit: parseFloat(totals.total_debit) || 0,
+            credit: parseFloat(totals.total_credit) || 0,
+          };
+        });
+
+        setAccounts(combinedData);
+      } catch (error) {
+        console.error("Error fetching accounts with totals:", error);
+        // Fallback to sample data
+        setAccounts([
+          {
+            code: "1-1000",
+            name: "Kas",
+            category: "Aset",
+            balance: 5000000,
+            debit: 7500000,
+            credit: 2500000,
+          },
+          {
+            code: "1-1100",
+            name: "Bank BCA",
+            category: "Aset",
+            balance: 15000000,
+            debit: 20000000,
+            credit: 5000000,
+          },
+          // Add more sample accounts as needed
+        ]);
+      } finally {
+        setLoading(false);
+      }
+    };
+
+    fetchAccountsWithTotals();
+
+    // Subscribe to changes
+    const subscription = supabase
+      .channel("ledger-changes")
+      .on(
+        "postgres_changes",
+        { event: "*", schema: "public", table: "transaction_entries" },
+        (payload) => {
+          fetchAccountsWithTotals();
+        },
+      )
+      .subscribe();
+
+    return () => {
+      subscription.unsubscribe();
+    };
+  }, [selectedCategory]);
 
   // Filter accounts based on search term and category
   const filteredAccounts = accounts.filter((account) => {

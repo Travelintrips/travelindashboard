@@ -20,25 +20,22 @@ type AuthContextType = {
 
 const AuthContext = createContext<AuthContextType | undefined>(undefined);
 
-// Using named export with const for consistent component exports
-export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
+function AuthProvider({ children }: { children: React.ReactNode }) {
   const [session, setSession] = useState<Session | null>(null);
   const [user, setUser] = useState<User | null>(null);
   const [profile, setProfile] = useState<any | null>(null);
   const [loading, setLoading] = useState(true);
   const [userRole, setUserRole] = useState<string | null>(null);
+  // Add a ref to track if initial auth has been processed
+  const initialAuthProcessedRef = React.useRef(false);
+  // Add a ref to track the current user ID being processed
+  const currentUserIdRef = React.useRef<string | null>(null);
 
   useEffect(() => {
     console.log("AuthProvider initializing...");
 
     // Track if the component is mounted to prevent state updates after unmount
     let isMounted = true;
-
-    // Track the current user ID to prevent duplicate profile fetches
-    let currentUserId: string | null = null;
-
-    // Flag to track if we've already processed an auth state change
-    let initialAuthProcessed = false;
 
     // Function to handle profile loading with retry logic
     const loadProfileWithRetry = async (userId: string, retryCount = 0) => {
@@ -55,7 +52,7 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
         if (role && role !== "Tamu") {
           console.log(`Profile fetched successfully with role: ${role}`);
           setLoading(false);
-          initialAuthProcessed = true;
+          initialAuthProcessedRef.current = true;
         } else if (retryCount < 2) {
           // Retry up to 3 times (0, 1, 2)
           console.log(
@@ -66,7 +63,7 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
         } else {
           console.log("Max retries reached, proceeding with current role");
           setLoading(false);
-          initialAuthProcessed = true;
+          initialAuthProcessedRef.current = true;
         }
       } catch (error) {
         if (!isMounted) return;
@@ -83,7 +80,7 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
           console.log("Max retries reached after errors, using default role");
           setUserRole("Tamu");
           setLoading(false);
-          initialAuthProcessed = true;
+          initialAuthProcessedRef.current = true;
         }
       }
     };
@@ -103,21 +100,21 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
 
         if (session?.user) {
           // Store the current user ID
-          currentUserId = session.user.id;
+          currentUserIdRef.current = session.user.id;
 
           console.log("User found in session, fetching profile...");
           loadProfileWithRetry(session.user.id);
         } else {
           console.log("No user in session, setting loading to false");
           setLoading(false);
-          initialAuthProcessed = true;
+          initialAuthProcessedRef.current = true;
         }
       })
       .catch((error) => {
         if (!isMounted) return;
         console.error("Error getting session:", error);
         setLoading(false);
-        initialAuthProcessed = true;
+        initialAuthProcessedRef.current = true;
       });
 
     // Listen for auth changes
@@ -126,17 +123,17 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
     } = supabase.auth.onAuthStateChange(async (event, session) => {
       if (!isMounted) return;
 
-      // Skip redundant auth state changes if we've already processed the initial auth
-      // or if it's the same user we're already processing
-      if (
-        (initialAuthProcessed &&
+      // Improved logic to skip redundant auth state changes
+      const isRedundantAuthChange =
+        // Skip if we've already processed initial auth and it's the same user signing in
+        (initialAuthProcessedRef.current &&
           event === "SIGNED_IN" &&
           session?.user?.id === user?.id) ||
-        (session?.user?.id && session.user.id === currentUserId)
-      ) {
-        console.log(
-          "Skipping redundant auth state change for already signed-in user",
-        );
+        // Skip if it's the same user ID we're already processing
+        (session?.user?.id && session.user.id === currentUserIdRef.current);
+
+      if (isRedundantAuthChange) {
+        console.log("Skipping redundant auth state change");
         return;
       }
 
@@ -151,14 +148,14 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
 
       if (session?.user) {
         // Update the current user ID to prevent duplicate fetches
-        currentUserId = session.user.id;
+        currentUserIdRef.current = session.user.id;
 
         console.log("User found in auth state change, fetching profile...");
         // Use the retry logic for auth state changes too
         loadProfileWithRetry(session.user.id);
       } else {
         // Clear the current user ID
-        currentUserId = null;
+        currentUserIdRef.current = null;
 
         console.log("No user in auth state change, clearing profile and role");
         setProfile(null);
@@ -260,8 +257,14 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
   const signIn = async (email: string, password: string) => {
     try {
       // Check for placeholder URL in development
-      if (!import.meta.env.PROD && (!import.meta.env.VITE_SUPABASE_URL || import.meta.env.VITE_SUPABASE_URL.includes('placeholder-url'))) {
-        console.warn('Development mode using placeholder Supabase URL - authentication will fail');
+      if (
+        !import.meta.env.PROD &&
+        (!import.meta.env.VITE_SUPABASE_URL ||
+          import.meta.env.VITE_SUPABASE_URL.includes("placeholder-url"))
+      ) {
+        console.warn(
+          "Development mode using placeholder Supabase URL - authentication will fail",
+        );
       }
 
       const { error } = await supabase.auth.signInWithPassword({
@@ -270,17 +273,19 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
       });
 
       // Handle network errors specifically
-      if (error?.message.includes('Failed to fetch')) {
-        console.error('Network error - check Supabase connection');
-        return { error: new Error('Unable to connect to authentication server') };
+      if (error?.message.includes("Failed to fetch")) {
+        console.error("Network error - check Supabase connection");
+        return {
+          error: new Error("Unable to connect to authentication server"),
+        };
       }
 
       return { error };
     } catch (error) {
       console.error("Error signing in:", error);
       // Add retry logic for network errors
-      if (error instanceof Error && error.message.includes('Network')) {
-        console.log('Attempting network error retry...');
+      if (error instanceof Error && error.message.includes("Network")) {
+        console.log("Attempting network error retry...");
         return await signIn(email, password);
       }
       return { error };
@@ -354,13 +359,16 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
   };
 
   return <AuthContext.Provider value={value}>{children}</AuthContext.Provider>;
-};
+}
 
-// Using named export with const for consistent hook exports
-export const useAuth = () => {
+// Export the provider as a named export
+export { AuthProvider };
+
+// Hook for using the auth context
+export function useAuth() {
   const context = useContext(AuthContext);
   if (context === undefined) {
     throw new Error("useAuth must be used within an AuthProvider");
   }
   return context;
-};
+}

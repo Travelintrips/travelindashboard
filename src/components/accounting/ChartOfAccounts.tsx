@@ -1,4 +1,5 @@
-import React, { useState } from "react";
+import React, { useState, useEffect } from "react";
+import { supabase } from "@/lib/supabase";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import {
   Table,
@@ -42,6 +43,11 @@ interface Account {
   category: string;
   balance: number;
   isActive: boolean;
+  standardCode?: string;
+  accountType?: string;
+  parentCode?: string;
+  level?: number;
+  hasChildren?: boolean;
 }
 
 interface ChartOfAccountsProps {
@@ -65,104 +71,220 @@ const ChartOfAccounts = ({
     category: "",
     balance: 0,
     isActive: true,
+    standardCode: "",
+    accountType: "Detail",
+    parentCode: "",
   });
 
-  // Sample accounts data
-  const [accounts, setAccounts] = useState<Account[]>([
-    {
-      code: "1-1000",
-      name: "Kas",
-      category: "Aset",
-      balance: 5000000,
-      isActive: true,
-    },
-    {
-      code: "1-1100",
-      name: "Bank BCA",
-      category: "Aset",
-      balance: 15000000,
-      isActive: true,
-    },
-    {
-      code: "1-1200",
-      name: "Piutang Usaha",
-      category: "Aset",
-      balance: 7500000,
-      isActive: true,
-    },
-    {
-      code: "1-2000",
-      name: "Peralatan",
-      category: "Aset",
-      balance: 10000000,
-      isActive: true,
-    },
-    {
-      code: "2-1000",
-      name: "Hutang Usaha",
-      category: "Kewajiban",
-      balance: 3000000,
-      isActive: true,
-    },
-    {
-      code: "2-2000",
-      name: "Hutang Bank",
-      category: "Kewajiban",
-      balance: 20000000,
-      isActive: true,
-    },
-    {
-      code: "3-1000",
-      name: "Modal",
-      category: "Ekuitas",
-      balance: 10000000,
-      isActive: true,
-    },
-    {
-      code: "3-2000",
-      name: "Laba Ditahan",
-      category: "Ekuitas",
-      balance: 4500000,
-      isActive: true,
-    },
-    {
-      code: "4-1000",
-      name: "Pendapatan Jasa",
-      category: "Pendapatan",
-      balance: 15000000,
-      isActive: true,
-    },
-    {
-      code: "5-1000",
-      name: "Beban Gaji",
-      category: "Beban",
-      balance: 7500000,
-      isActive: true,
-    },
-    {
-      code: "5-2000",
-      name: "Beban Sewa",
-      category: "Beban",
-      balance: 3500000,
-      isActive: true,
-    },
-    {
-      code: "5-3000",
-      name: "Beban Utilitas",
-      category: "Beban",
-      balance: 1500000,
-      isActive: true,
-    },
-  ]);
+  // Accounts data from database
+  const [accounts, setAccounts] = useState<Account[]>([]);
+  const [loading, setLoading] = useState(true);
+
+  // Fetch accounts from database
+  useEffect(() => {
+    const fetchAccounts = async () => {
+      try {
+        const { data, error } = await supabase
+          .from("accounts")
+          .select("*")
+          .order("code");
+
+        if (error) throw error;
+
+        // Transform data to match Account interface
+        const transformedData = data.map((account) => ({
+          code: account.code,
+          name: account.name,
+          category: account.category,
+          balance: account.balance,
+          isActive: account.is_active,
+          standardCode: account.standard_code,
+          accountType: account.account_type,
+          parentCode: account.parent_code,
+        }));
+
+        // Calculate levels and hasChildren properties
+        const accountsWithLevels = transformedData.map((account) => {
+          // Calculate level based on code structure (e.g., 1-0000 is level 1, 1-1000 is level 2)
+          const level = account.code.split("-")[1]
+            ? (account.code.split("-")[1].match(/0/g) || []).length / 2 + 1
+            : 1;
+
+          // Check if this account has children
+          const hasChildren = transformedData.some(
+            (a) => a.parentCode === account.code,
+          );
+
+          return {
+            ...account,
+            level,
+            hasChildren,
+          };
+        });
+
+        setAccounts(accountsWithLevels);
+      } catch (error) {
+        console.error("Error fetching accounts:", error);
+        // Fallback to sample data if fetch fails
+        setAccounts([
+          {
+            code: "1-0000",
+            name: "Aset",
+            category: "Aset",
+            balance: 20000000,
+            isActive: true,
+            standardCode: "1",
+            accountType: "Header",
+            level: 1,
+            hasChildren: true,
+          },
+          {
+            code: "1-1000",
+            name: "Aset Lancar",
+            category: "Aset",
+            balance: 20000000,
+            isActive: true,
+            standardCode: "11",
+            accountType: "Header",
+            parentCode: "1-0000",
+            level: 2,
+            hasChildren: true,
+          },
+          {
+            code: "1-1100",
+            name: "Kas",
+            category: "Aset",
+            balance: 5000000,
+            isActive: true,
+            standardCode: "111",
+            accountType: "Detail",
+            parentCode: "1-1000",
+            level: 3,
+            hasChildren: false,
+          },
+          {
+            code: "1-1200",
+            name: "Bank",
+            category: "Aset",
+            balance: 15000000,
+            isActive: true,
+            standardCode: "112",
+            accountType: "Header",
+            parentCode: "1-1000",
+            level: 3,
+            hasChildren: true,
+          },
+          {
+            code: "1-1201",
+            name: "Bank BCA",
+            category: "Aset",
+            balance: 10000000,
+            isActive: true,
+            standardCode: "11201",
+            accountType: "Detail",
+            parentCode: "1-1200",
+            level: 4,
+            hasChildren: false,
+          },
+          {
+            code: "1-1202",
+            name: "Bank Mandiri",
+            category: "Aset",
+            balance: 5000000,
+            isActive: true,
+            standardCode: "11202",
+            accountType: "Detail",
+            parentCode: "1-1200",
+            level: 4,
+            hasChildren: false,
+          },
+          {
+            code: "4-0000",
+            name: "Pendapatan",
+            category: "Pendapatan",
+            balance: 25000000,
+            isActive: true,
+            standardCode: "4",
+            accountType: "Header",
+            level: 1,
+            hasChildren: true,
+          },
+          {
+            code: "4-1100",
+            name: "Pendapatan Penjualan",
+            category: "Pendapatan",
+            balance: 25000000,
+            isActive: true,
+            standardCode: "411",
+            accountType: "Header",
+            parentCode: "4-0000",
+            level: 3,
+            hasChildren: true,
+          },
+          {
+            code: "4-1110",
+            name: "Penjualan Tiket Pesawat",
+            category: "Pendapatan",
+            balance: 15000000,
+            isActive: true,
+            standardCode: "4111",
+            accountType: "Detail",
+            parentCode: "4-1100",
+            level: 4,
+            hasChildren: false,
+          },
+          {
+            code: "4-1120",
+            name: "Penjualan Hotel",
+            category: "Pendapatan",
+            balance: 10000000,
+            isActive: true,
+            standardCode: "4112",
+            accountType: "Detail",
+            parentCode: "4-1100",
+            level: 4,
+            hasChildren: false,
+          },
+        ]);
+      } finally {
+        setLoading(false);
+      }
+    };
+
+    fetchAccounts();
+
+    // Subscribe to changes
+    const subscription = supabase
+      .channel("accounts-changes")
+      .on(
+        "postgres_changes",
+        { event: "*", schema: "public", table: "accounts" },
+        (payload) => {
+          fetchAccounts();
+        },
+      )
+      .subscribe();
+
+    return () => {
+      subscription.unsubscribe();
+    };
+  }, []);
 
   // Filter accounts based on search term
   const filteredAccounts = accounts.filter((account) => {
     return (
       account.code.toLowerCase().includes(searchTerm.toLowerCase()) ||
       account.name.toLowerCase().includes(searchTerm.toLowerCase()) ||
-      account.category.toLowerCase().includes(searchTerm.toLowerCase())
+      account.category.toLowerCase().includes(searchTerm.toLowerCase()) ||
+      (account.standardCode &&
+        account.standardCode.toLowerCase().includes(searchTerm.toLowerCase()))
     );
   });
+
+  // Sort accounts by code for hierarchical display
+  const sortedAccounts = [...filteredAccounts].sort((a, b) =>
+    a.code.localeCompare(b.code),
+  );
 
   // Format currency
   const formatCurrency = (amount: number) => {
@@ -173,35 +295,97 @@ const ChartOfAccounts = ({
   };
 
   // Handle add new account
-  const handleAddAccount = () => {
-    setAccounts([...accounts, newAccount]);
-    setNewAccount({
-      code: "",
-      name: "",
-      category: "",
-      balance: 0,
-      isActive: true,
-    });
-    setIsAddDialogOpen(false);
+  const handleAddAccount = async () => {
+    try {
+      const { data, error } = await supabase
+        .from("accounts")
+        .insert([
+          {
+            code: newAccount.code,
+            name: newAccount.name,
+            category: newAccount.category,
+            balance: newAccount.balance,
+            is_active: newAccount.isActive,
+            standard_code: newAccount.standardCode,
+            account_type: newAccount.accountType,
+            parent_code: newAccount.parentCode || null,
+          },
+        ])
+        .select();
+
+      if (error) throw error;
+
+      // Add the new account to the local state
+      setAccounts([...accounts, newAccount]);
+      setNewAccount({
+        code: "",
+        name: "",
+        category: "",
+        balance: 0,
+        isActive: true,
+        standardCode: "",
+        accountType: "Detail",
+        parentCode: "",
+      });
+      setIsAddDialogOpen(false);
+    } catch (error) {
+      console.error("Error adding account:", error);
+      alert("Failed to add account. Please try again.");
+    }
   };
 
   // Handle edit account
-  const handleEditAccount = () => {
+  const handleEditAccount = async () => {
     if (selectedAccount) {
-      setAccounts(
-        accounts.map((account) =>
-          account.code === selectedAccount.code ? selectedAccount : account,
-        ),
-      );
-      setSelectedAccount(null);
-      setIsEditDialogOpen(false);
+      try {
+        const { data, error } = await supabase
+          .from("accounts")
+          .update({
+            name: selectedAccount.name,
+            category: selectedAccount.category,
+            balance: selectedAccount.balance,
+            is_active: selectedAccount.isActive,
+            standard_code: selectedAccount.standardCode,
+            account_type: selectedAccount.accountType,
+            parent_code: selectedAccount.parentCode || null,
+          })
+          .eq("code", selectedAccount.code)
+          .select();
+
+        if (error) throw error;
+
+        // Update the account in local state
+        setAccounts(
+          accounts.map((account) =>
+            account.code === selectedAccount.code ? selectedAccount : account,
+          ),
+        );
+        setSelectedAccount(null);
+        setIsEditDialogOpen(false);
+      } catch (error) {
+        console.error("Error updating account:", error);
+        alert("Failed to update account. Please try again.");
+      }
     }
   };
 
   // Handle delete account
-  const handleDeleteAccount = (code: string) => {
+  const handleDeleteAccount = async (code: string) => {
     if (confirm("Apakah Anda yakin ingin menghapus akun ini?")) {
-      setAccounts(accounts.filter((account) => account.code !== code));
+      try {
+        const { error } = await supabase
+          .from("accounts")
+          .delete()
+          .eq("code", code);
+
+        if (error) throw error;
+
+        // Remove the account from local state
+        setAccounts(accounts.filter((account) => account.code !== code));
+      } catch (error) {
+        console.error("Error deleting account:", error);
+        alert("Failed to delete account. Please try again.");
+      }
     }
   };
 
@@ -250,6 +434,23 @@ const ChartOfAccounts = ({
                     />
                   </div>
                   <div className="grid grid-cols-4 items-center gap-4">
+                    <Label htmlFor="standardCode" className="text-right">
+                      Kode Standar
+                    </Label>
+                    <Input
+                      id="standardCode"
+                      value={newAccount.standardCode}
+                      onChange={(e) =>
+                        setNewAccount({
+                          ...newAccount,
+                          standardCode: e.target.value,
+                        })
+                      }
+                      className="col-span-3"
+                      placeholder="Contoh: 111"
+                    />
+                  </div>
+                  <div className="grid grid-cols-4 items-center gap-4">
                     <Label htmlFor="name" className="text-right">
                       Nama Akun
                     </Label>
@@ -282,6 +483,50 @@ const ChartOfAccounts = ({
                         <SelectItem value="Ekuitas">Ekuitas</SelectItem>
                         <SelectItem value="Pendapatan">Pendapatan</SelectItem>
                         <SelectItem value="Beban">Beban</SelectItem>
+                      </SelectContent>
+                    </Select>
+                  </div>
+                  <div className="grid grid-cols-4 items-center gap-4">
+                    <Label htmlFor="accountType" className="text-right">
+                      Tipe Akun
+                    </Label>
+                    <Select
+                      value={newAccount.accountType}
+                      onValueChange={(value) =>
+                        setNewAccount({ ...newAccount, accountType: value })
+                      }
+                    >
+                      <SelectTrigger className="col-span-3">
+                        <SelectValue placeholder="Pilih tipe akun" />
+                      </SelectTrigger>
+                      <SelectContent>
+                        <SelectItem value="Header">Header</SelectItem>
+                        <SelectItem value="Detail">Detail</SelectItem>
+                      </SelectContent>
+                    </Select>
+                  </div>
+                  <div className="grid grid-cols-4 items-center gap-4">
+                    <Label htmlFor="parentCode" className="text-right">
+                      Akun Induk
+                    </Label>
+                    <Select
+                      value={newAccount.parentCode || ""}
+                      onValueChange={(value) =>
+                        setNewAccount({ ...newAccount, parentCode: value })
+                      }
+                    >
+                      <SelectTrigger className="col-span-3">
+                        <SelectValue placeholder="Pilih akun induk (opsional)" />
+                      </SelectTrigger>
+                      <SelectContent>
+                        <SelectItem value="">Tidak Ada</SelectItem>
+                        {accounts
+                          .filter((a) => a.accountType === "Header")
+                          .map((account) => (
+                            <SelectItem key={account.code} value={account.code}>
+                              {account.code} - {account.name}
+                            </SelectItem>
+                          ))}
                       </SelectContent>
                     </Select>
                   </div>
@@ -345,6 +590,12 @@ const ChartOfAccounts = ({
                       <ArrowUpDown className="ml-2 h-4 w-4" />
                     </div>
                   </TableHead>
+                  <TableHead className="w-[100px]">
+                    <div className="flex items-center">
+                      Kode Standar
+                      <ArrowUpDown className="ml-2 h-4 w-4" />
+                    </div>
+                  </TableHead>
                   <TableHead>
                     <div className="flex items-center">
                       Nama Akun
@@ -354,6 +605,12 @@ const ChartOfAccounts = ({
                   <TableHead>
                     <div className="flex items-center">
                       Kategori
+                      <ArrowUpDown className="ml-2 h-4 w-4" />
+                    </div>
+                  </TableHead>
+                  <TableHead>
+                    <div className="flex items-center">
+                      Tipe
                       <ArrowUpDown className="ml-2 h-4 w-4" />
                     </div>
                   </TableHead>
@@ -367,13 +624,44 @@ const ChartOfAccounts = ({
                 </TableRow>
               </TableHeader>
               <TableBody>
-                {filteredAccounts.map((account) => (
-                  <TableRow key={account.code}>
+                {sortedAccounts.map((account) => (
+                  <TableRow
+                    key={account.code}
+                    className={
+                      account.accountType === "Header" ? "bg-gray-50" : ""
+                    }
+                  >
                     <TableCell className="font-medium">
-                      {account.code}
+                      <div className="flex items-center">
+                        <span className="ml-[{account.level ? (account.level - 1) * 12 : 0}px]">
+                          {account.code}
+                        </span>
+                      </div>
                     </TableCell>
-                    <TableCell>{account.name}</TableCell>
+                    <TableCell>{account.standardCode || "-"}</TableCell>
+                    <TableCell>
+                      <div
+                        style={{
+                          paddingLeft: account.level
+                            ? (account.level - 1) * 16
+                            : 0,
+                        }}
+                      >
+                        {account.name}
+                      </div>
+                    </TableCell>
                     <TableCell>{account.category}</TableCell>
+                    <TableCell>
+                      <span
+                        className={
+                          account.accountType === "Header"
+                            ? "text-blue-600 font-medium"
+                            : ""
+                        }
+                      >
+                        {account.accountType || "Detail"}
+                      </span>
+                    </TableCell>
                     <TableCell className="text-right">
                       {formatCurrency(account.balance)}
                     </TableCell>
@@ -422,6 +710,26 @@ const ChartOfAccounts = ({
                                     }
                                     className="col-span-3"
                                     disabled
+                                  />
+                                </div>
+                                <div className="grid grid-cols-4 items-center gap-4">
+                                  <Label
+                                    htmlFor="edit-standard-code"
+                                    className="text-right"
+                                  >
+                                    Kode Standar
+                                  </Label>
+                                  <Input
+                                    id="edit-standard-code"
+                                    value={selectedAccount.standardCode || ""}
+                                    onChange={(e) =>
+                                      setSelectedAccount({
+                                        ...selectedAccount,
+                                        standardCode: e.target.value,
+                                      })
+                                    }
+                                    className="col-span-3"
+                                    placeholder="Contoh: 111"
                                   />
                                 </div>
                                 <div className="grid grid-cols-4 items-center gap-4">
@@ -476,6 +784,77 @@ const ChartOfAccounts = ({
                                       <SelectItem value="Beban">
                                         Beban
                                       </SelectItem>
+                                    </SelectContent>
+                                  </Select>
+                                </div>
+                                <div className="grid grid-cols-4 items-center gap-4">
+                                  <Label
+                                    htmlFor="edit-account-type"
+                                    className="text-right"
+                                  >
+                                    Tipe Akun
+                                  </Label>
+                                  <Select
+                                    value={
+                                      selectedAccount.accountType || "Detail"
+                                    }
+                                    onValueChange={(value) =>
+                                      setSelectedAccount({
+                                        ...selectedAccount,
+                                        accountType: value,
+                                      })
+                                    }
+                                  >
+                                    <SelectTrigger className="col-span-3">
+                                      <SelectValue placeholder="Pilih tipe akun" />
+                                    </SelectTrigger>
+                                    <SelectContent>
+                                      <SelectItem value="Header">
+                                        Header
+                                      </SelectItem>
+                                      <SelectItem value="Detail">
+                                        Detail
+                                      </SelectItem>
+                                    </SelectContent>
+                                  </Select>
+                                </div>
+                                <div className="grid grid-cols-4 items-center gap-4">
+                                  <Label
+                                    htmlFor="edit-parent-code"
+                                    className="text-right"
+                                  >
+                                    Akun Induk
+                                  </Label>
+                                  <Select
+                                    value={selectedAccount.parentCode || ""}
+                                    onValueChange={(value) =>
+                                      setSelectedAccount({
+                                        ...selectedAccount,
+                                        parentCode: value || null,
+                                      })
+                                    }
+                                  >
+                                    <SelectTrigger className="col-span-3">
+                                      <SelectValue placeholder="Pilih akun induk (opsional)" />
+                                    </SelectTrigger>
+                                    <SelectContent>
+                                      <SelectItem value="">
+                                        Tidak Ada
+                                      </SelectItem>
+                                      {accounts
+                                        .filter(
+                                          (a) =>
+                                            a.accountType === "Header" &&
+                                            a.code !== selectedAccount.code,
+                                        )
+                                        .map((account) => (
+                                          <SelectItem
+                                            key={account.code}
+                                            value={account.code}
+                                          >
+                                            {account.code} - {account.name}
+                                          </SelectItem>
+                                        ))}
                                     </SelectContent>
                                   </Select>
                                 </div>
@@ -552,42 +931,17 @@ const ChartOfAccounts = ({
                           size="icon"
                           onClick={() => handleDeleteAccount(account.code)}
                         >
-                          <Trash2 className="h-4 w-4 text-red-500" />
+                          <Trash2 className="h-4 w-4" />
                         </Button>
                       </div>
                     </TableCell>
                   </TableRow>
                 ))}
-                {filteredAccounts.length === 0 && (
-                  <TableRow>
-                    <TableCell
-                      colSpan={5}
-                      className="text-center py-6 text-gray-500"
-                    >
-                      Tidak ada akun yang ditemukan
-                    </TableCell>
-                  </TableRow>
-                )}
               </TableBody>
             </Table>
           </CardContent>
         </Card>
       </main>
-
-      {/* Footer */}
-      <footer className="bg-white border-t border-gray-200 py-4 px-6 mt-8">
-        <div className="container mx-auto">
-          <div className="flex justify-between items-center">
-            <p className="text-sm text-gray-500">
-              &copy; {new Date().getFullYear()} Sistem Akuntansi Indonesia.
-              Seluruh hak cipta dilindungi.
-            </p>
-            <p className="text-sm text-gray-500">
-              Terakhir diperbarui: {new Date().toLocaleDateString()}
-            </p>
-          </div>
-        </div>
-      </footer>
     </div>
   );
 };

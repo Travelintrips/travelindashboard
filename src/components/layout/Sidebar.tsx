@@ -14,6 +14,7 @@ import {
   Layers,
   Settings,
   ArrowRightLeft,
+  Plane,
 } from "lucide-react";
 
 const Sidebar = () => {
@@ -21,84 +22,88 @@ const Sidebar = () => {
 
   const menuItems = [
     {
-      title: "Dashboard",
+      title: "Dasbor",
       icon: <LayoutDashboard className="h-5 w-5" />,
       path: "/",
     },
     {
-      title: "Data Entry",
+      title: "Entri Data",
       icon: <FileInput className="h-5 w-5" />,
       path: "/data-entry",
     },
     {
-      title: "User Management",
+      title: "Manajemen Pengguna",
       icon: <Users className="h-5 w-5" />,
       path: "/user-management",
     },
     {
-      title: "Role Management",
+      title: "Manajemen Peran",
       icon: <UserCog className="h-5 w-5" />,
       path: "/role-management",
     },
     {
-      title: "Accounting",
+      title: "Akuntansi",
       icon: <Calculator className="h-5 w-5" />,
       path: "/accounting",
       subItems: [
         {
-          title: "General Ledger",
+          title: "Buku Besar",
           path: "/general-ledger",
         },
         {
-          title: "Transaction Entry",
+          title: "Entri Transaksi",
           path: "/transaction-entry",
         },
         {
-          title: "Financial Reports",
+          title: "Laporan Keuangan",
           path: "/financial-reports",
         },
         {
-          title: "Chart of Accounts",
+          title: "Bagan Akun",
           path: "/chart-of-accounts",
         },
       ],
     },
     {
-      title: "Sales",
+      title: "Penjualan",
       icon: <ShoppingCart className="h-5 w-5" />,
       path: "/sales-dashboard",
       subItems: [
         {
-          title: "Sales Dashboard",
+          title: "Dasbor Penjualan",
           path: "/sales-dashboard",
         },
         {
-          title: "Transaction Entry",
+          title: "Entri Transaksi",
           path: "/sales-transaction-entry",
         },
         {
-          title: "Sales Reports",
+          title: "Laporan Penjualan",
           path: "/sales-reports",
         },
       ],
     },
     {
-      title: "Inventory",
+      title: "Inventaris",
       icon: <Layers className="h-5 w-5" />,
       path: "/inventory-dashboard",
       subItems: [
         {
-          title: "Inventory Dashboard",
+          title: "Dasbor Inventaris",
           path: "/inventory-dashboard",
         },
         {
-          title: "Transaction Entry",
+          title: "Entri Transaksi",
           path: "/inventory-transaction-entry",
+        },
+        {
+          title: "Produk Layanan Bandara",
+          path: "/airport-service-products",
         },
       ],
     },
     {
-      title: "Integration",
+      title: "Integrasi",
       icon: <ArrowRightLeft className="h-5 w-5" />,
       path: "/integration",
     },
@@ -178,7 +183,7 @@ const Sidebar = () => {
             >
               <div className="flex items-center">
                 <Settings className="h-3 w-3 mr-1" />
-                Settings
+                Pengaturan
               </div>
             </Link>
           </div>

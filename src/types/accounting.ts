@@ -105,3 +105,16 @@ export interface SalesReport {
     averageTransactionValue: number;
   };
 }
+
+// Integration with Inventory
+export interface InventoryAccountingIntegration {
+  // Function to convert an inventory transaction to an accounting transaction
+  convertToAccountingTransaction: (inventoryTransaction: any) => Transaction;
+  // Function to sync all pending inventory transactions to accounting
+  syncTransactions: () => Promise<{
+    success: boolean;
+    syncedCount: number;
+    failedCount: number;
+    errors?: string[];
+  }>;
+}

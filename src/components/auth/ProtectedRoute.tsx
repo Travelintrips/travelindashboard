@@ -13,18 +13,41 @@ const ProtectedRoute: React.FC<ProtectedRouteProps> = ({
 }) => {
   const { user, loading, userRole } = useAuth();
   const location = useLocation();
+  const timeoutRef = React.useRef<NodeJS.Timeout | null>(null);
+
+  // Clear timeout on unmount to prevent memory leaks
+  React.useEffect(() => {
+    return () => {
+      if (timeoutRef.current) {
+        clearTimeout(timeoutRef.current);
+      }
+    };
+  }, []);
+
+  // Define the useEffect hook outside of conditional blocks to avoid React hook rules violation
+  React.useEffect(() => {
+    // Clear any existing timeout first
+    if (timeoutRef.current) {
+      clearTimeout(timeoutRef.current);
+    }
+
+    // Only set timeout if we're still loading and don't have a user yet
+    if (loading && !user) {
+      timeoutRef.current = setTimeout(() => {
+        console.log("Loading timeout reached, redirecting to login");
+        // Use Navigate component instead of direct page refresh
+        window.location.replace("/login");
+      }, 15000); // 15 seconds timeout
+    }
+
+    return () => {
+      if (timeoutRef.current) {
+        clearTimeout(timeoutRef.current);
+      }
+    };
+  }, [loading, user]);
 
   if (loading) {
-    // Add a timeout to prevent infinite loading
-    React.useEffect(() => {
-      const timer = setTimeout(() => {
-        console.log("Loading timeout reached, forcing navigation to login");
-        window.location.href = "/login";
-      }, 15000); // 15 seconds timeout - increased to give more time
-
-      return () => clearTimeout(timer);
-    }, []);
-
     console.log("ProtectedRoute - Loading state", { user, userRole });
 
     // If we have a user but are still loading, it's likely just waiting for the profile

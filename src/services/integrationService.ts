@@ -8,6 +8,8 @@ import {
   SalesTransaction,
   SyncResult,
 } from "@/types/integration";
+import { syncInventoryTransactionsToAccounting } from "./inventoryService";
+import { supabase } from "@/lib/supabase";
 
 // Default account mappings
 const defaultAccountMappings: AccountMapping[] = [
@@ -22,6 +24,42 @@ const defaultAccountMappings: AccountMapping[] = [
     revenueAccountCode: "4-1000", // Pendapatan Jasa
     receivableAccountCode: "1-1100", // Bank BCA
     description: "Pendapatan Penjualan Kamar Hotel",
+  },
+  {
+    salesType: "executive_lounge",
+    revenueAccountCode: "4101", // Pendapatan Executive Lounge
+    receivableAccountCode: "1-1100", // Bank BCA
+    description: "Pendapatan Executive Lounge",
+  },
+  {
+    salesType: "transportation",
+    revenueAccountCode: "4102", // Pendapatan Transportation
+    receivableAccountCode: "1-1100", // Bank BCA
+    description: "Pendapatan Transportation",
+  },
+  {
+    salesType: "sapphire_handling",
+    revenueAccountCode: "4103", // Pendapatan Sapphire Handling
+    receivableAccountCode: "1-1100", // Bank BCA
+    description: "Pendapatan Sapphire Handling",
+  },
+  {
+    salesType: "porter_service",
+    revenueAccountCode: "4104", // Pendapatan Porter Service
+    receivableAccountCode: "1-1100", // Bank BCA
+    description: "Pendapatan Porter Service",
+  },
+  {
+    salesType: "modem_rental",
+    revenueAccountCode: "4105", // Pendapatan Modem Rental & Sim Card
+    receivableAccountCode: "1-1100", // Bank BCA
+    description: "Pendapatan Modem Rental & Sim Card",
+  },
+  {
+    salesType: "sport_center",
+    revenueAccountCode: "4106", // Pendapatan Sport Center
+    receivableAccountCode: "1-1100", // Bank BCA
+    description: "Pendapatan Sport Center",
   },
 ];
 
@@ -196,4 +234,133 @@ export const updateAccountMapping = (mapping: AccountMapping): void => {
   } else {
     defaultAccountMappings.push(mapping);
   }
+};
+
+// Sync all pending transactions (both sales and inventory)
+export const syncAllTransactions = async (): Promise<{
+  sales: SyncResult;
+  inventory: {
+    success: boolean;
+    syncedCount: number;
+    failedCount: number;
+    errors?: string[];
+  };
+}> => {
+  const salesResult = await syncTransactions();
+  const inventoryResult = await syncInventoryTransactionsToAccounting();
+
+  return {
+    sales: salesResult,
+    inventory: inventoryResult,
+  };
+};
+
+// Get integration status
+export const getIntegrationStatus = async (): Promise<{
+  pendingSalesTransactions: number;
+  pendingInventoryTransactions: number;
+  lastSyncTime: string;
+  syncErrors: number;
+}> => {
+  // In a real implementation, this would query the database
+  // For now, return mock data
+  return {
+    pendingSalesTransactions: pendingSalesTransactions.filter(
+      (t) => !t.syncedToAccounting,
+    ).length,
+    pendingInventoryTransactions: 3, // This would come from the inventory service
+    lastSyncTime: new Date().toISOString(),
+    syncErrors: 0,
+  };
+};
+
+// Log integration error
+export const logIntegrationError = async (
+  error: any,
+  source: string,
+): Promise<void> => {
+  try {
+    console.error(`Integration error from ${source}:`, error);
+
+    // In a real implementation, this would insert into the database
+    // const { data, error: insertError } = await supabase
+    //   .from("integration_logs")
+    //   .insert([{
+    //     source,
+    //     error_message: error instanceof Error ? error.message : String(error),
+    //     created_at: new Date().toISOString(),
+    //   }]);
+
+    // if (insertError) throw insertError;
+
+    // Send notification for critical errors
+    await sendErrorNotification(error, source);
+  } catch (logError) {
+    console.error("Error logging integration error:", logError);
+  }
+};
+
+// Send error notification
+const sendErrorNotification = async (
+  error: any,
+  source: string,
+): Promise<void> => {
+  try {
+    console.log(`Sending notification: Integration error from ${source}`);
+    // In a real implementation, this would call an edge function
+    // const { data, error: invokeError } = await supabase.functions.invoke("send-notification", {
+    //   body: {
+    //     type: "Sync Error Alert",
+    //     message: `Transaction failed to post to General Ledger. Please check system logs.`,
+    //     source,
+    //     error: error instanceof Error ? error.message : String(error),
+    //     recipient: "admin@company.com",
+    //   },
+    // });
+
+    // if (invokeError) throw invokeError;
+  } catch (notifyError) {
+    console.error("Error sending notification:", notifyError);
+  }
+};
+
+// Function to fetch integration data
+export const fetchIntegrationData = async () => {
+  // Simulate API call with a delay
+  return new Promise<SalesTransaction[]>((resolve) => {
+    setTimeout(() => {
+      resolve([
+        {
+          id: "S001",
+          date: new Date(),
+          customerName: "John Doe",
+          customerEmail: "john@example.com",
+          transactionType: "flight",
+          productId: "F001",
+          productName: "Jakarta - Bali",
+          quantity: 2,
+          unitPrice: 1500000,
+          totalAmount: 3000000,
+          paymentMethod: "Credit Card",
+          reference: "INV-001",
+          syncedToAccounting: false,
+        },
+        {
+          id: "S002",
+          date: new Date(),
+          customerName: "Jane Smith",
+          customerEmail: "jane@example.com",
+          transactionType: "hotel",
+          productId: "H001",
+          productName: "Grand Hyatt Bali",
+          quantity: 3,
+          unitPrice: 2000000,
+          totalAmount: 6000000,
+          paymentMethod: "Bank Transfer",
+          reference: "INV-002",
+          syncedToAccounting: false,
+        },
+      ]);
+    }, 1000);
+  });
 };

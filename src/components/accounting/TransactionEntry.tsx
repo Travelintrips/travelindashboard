@@ -1,4 +1,5 @@
-import React, { useState } from "react";
+import React, { useState, useEffect } from "react";
+import { supabase } from "@/lib/supabase";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -65,76 +66,240 @@ const TransactionEntry = ({
     reference: "",
   });
 
-  // Sample accounts for dropdown
-  const accounts = [
-    { code: "1-1000", name: "Kas" },
-    { code: "1-1100", name: "Bank BCA" },
-    { code: "1-1200", name: "Piutang Usaha" },
-    { code: "1-2000", name: "Peralatan" },
-    { code: "2-1000", name: "Hutang Usaha" },
-    { code: "2-2000", name: "Hutang Bank" },
-    { code: "3-1000", name: "Modal" },
-    { code: "3-2000", name: "Laba Ditahan" },
-    { code: "4-1000", name: "Pendapatan Jasa" },
-    { code: "5-1000", name: "Beban Gaji" },
-    { code: "5-2000", name: "Beban Sewa" },
-    { code: "5-3000", name: "Beban Utilitas" },
-  ];
+  // Accounts for dropdown from database
+  const [accounts, setAccounts] = useState<
+    { code: string; name: string; id?: string; accountType?: string }[]
+  >([]);
 
-  // Sample recent transactions
-  const recentTransactions = [
+  // Fetch accounts from database
+  useEffect(() => {
+    const fetchAccounts = async () => {
+      try {
+        const { data, error } = await supabase
+          .from("accounts")
+          .select("id, code, name, account_type")
+          .order("code");
+
+        if (error) throw error;
+        setAccounts(
+          data.map((account) => ({
+            id: account.id,
+            code: account.code,
+            name: account.name,
+            accountType: account.account_type,
+          })),
+        );
+      } catch (error) {
+        console.error("Error fetching accounts:", error);
+        // Fallback to sample data
+        setAccounts([
+          { code: "1-1000", name: "Kas", accountType: "Detail" },
+          { code: "1-1100", name: "Bank BCA", accountType: "Detail" },
+          { code: "1-1200", name: "Piutang Usaha", accountType: "Detail" },
+          { code: "1-2000", name: "Peralatan", accountType: "Detail" },
+          { code: "2-1000", name: "Hutang Usaha", accountType: "Detail" },
+          { code: "2-2000", name: "Hutang Bank", accountType: "Detail" },
+          { code: "3-1000", name: "Modal", accountType: "Detail" },
+          { code: "3-2000", name: "Laba Ditahan", accountType: "Detail" },
+          { code: "4-1000", name: "Pendapatan Jasa", accountType: "Detail" },
+          { code: "5-1000", name: "Beban Gaji", accountType: "Detail" },
+          { code: "5-2000", name: "Beban Sewa", accountType: "Detail" },
+          { code: "5-3000", name: "Beban Utilitas", accountType: "Detail" },
+        ]);
+      }
+    };
+
+    fetchAccounts();
+  }, []);
+
+  // Recent transactions from database
+  const [recentTransactions, setRecentTransactions] = useState<
     {
-      id: "TRX-1234-567890",
-      date: "2023-05-15",
-      description: "Pembayaran Gaji Karyawan",
-      debitAccount: "Beban Gaji",
-      creditAccount: "Bank BCA",
-      amount: 15000000,
-    },
-    {
-      id: "TRX-5678-123456",
-      date: "2023-05-14",
-      description: "Pendapatan Jasa Konsultasi",
-      debitAccount: "Bank BCA",
-      creditAccount: "Pendapatan Jasa",
-      amount: 25000000,
-    },
-    {
-      id: "TRX-9012-345678",
-      date: "2023-05-13",
-      description: "Pembayaran Sewa Kantor",
-      debitAccount: "Beban Sewa",
-      creditAccount: "Kas",
-      amount: 5000000,
-    },
-  ];
+      id: string;
+      date: string;
+      description: string;
+      debitAccount: string;
+      creditAccount: string;
+      amount: number;
+    }[]
+  >([]);
+
+  // Fetch recent transactions
+  useEffect(() => {
+    const fetchRecentTransactions = async () => {
+      try {
+        const { data, error } = await supabase
+          .from("transactions")
+          .select(
+            `
+            id, 
+            transaction_id, 
+            date, 
+            description,
+            transaction_entries(account_id, account_code, account_name, debit, credit)
+          `,
+          )
+          .order("date", { ascending: false })
+          .limit(5);
+
+        if (error) throw error;
+
+        // Transform data to match the expected format
+        const transformedData = data.map((transaction) => {
+          const entries = transaction.transaction_entries;
+          const debitEntry = entries.find((e) => e.debit > 0);
+          const creditEntry = entries.find((e) => e.credit > 0);
+
+          return {
+            id: transaction.transaction_id,
+            date: new Date(transaction.date).toISOString().split("T")[0],
+            description: transaction.description,
+            debitAccount: debitEntry ? debitEntry.account_name : "Unknown",
+            creditAccount: creditEntry ? creditEntry.account_name : "Unknown",
+            amount: debitEntry
+              ? debitEntry.debit
+              : creditEntry
+                ? creditEntry.credit
+                : 0,
+          };
+        });
+
+        setRecentTransactions(transformedData);
+      } catch (error) {
+        console.error("Error fetching recent transactions:", error);
+        // Fallback to sample data
+        setRecentTransactions([
+          {
+            id: "TRX-1234-567890",
+            date: "2023-05-15",
+            description: "Pembayaran Gaji Karyawan",
+            debitAccount: "Beban Gaji",
+            creditAccount: "Bank BCA",
+            amount: 15000000,
+          },
+          {
+            id: "TRX-5678-123456",
+            date: "2023-05-14",
+            description: "Pendapatan Jasa Konsultasi",
+            debitAccount: "Bank BCA",
+            creditAccount: "Pendapatan Jasa",
+            amount: 25000000,
+          },
+          {
+            id: "TRX-9012-345678",
+            date: "2023-05-13",
+            description: "Pembayaran Sewa Kantor",
+            debitAccount: "Beban Sewa",
+            creditAccount: "Kas",
+            amount: 5000000,
+          },
+        ]);
+      }
+    };
+
+    fetchRecentTransactions();
+
+    // Subscribe to changes
+    const subscription = supabase
+      .channel("transactions-changes")
+      .on(
+        "postgres_changes",
+        { event: "INSERT", schema: "public", table: "transactions" },
+        (payload) => {
+          fetchRecentTransactions();
+        },
+      )
+      .subscribe();
+
+    return () => {
+      subscription.unsubscribe();
+    };
+  }, []);
 
   const handleFormChange = (field: keyof Transaction, value: any) => {
     setTransaction((prev) => ({ ...prev, [field]: value }));
   };
 
-  const handleSubmit = (e: React.FormEvent) => {
+  const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    console.log("Transaction submitted:", transaction);
 
-    // Here we would save the transaction to the database
-    // In a real application, this would be connected to the same database
-    // that the integration service uses
+    try {
+      // Get account details for the selected accounts
+      const debitAccountObj = accounts.find(
+        (a) => a.code === transaction.debitAccount,
+      );
+      const creditAccountObj = accounts.find(
+        (a) => a.code === transaction.creditAccount,
+      );
 
-    // Reset form
-    setTransaction({
-      ...transaction,
-      transactionId: generateTransactionId(),
-      description: "",
-      debitAccount: "",
-      creditAccount: "",
-      amount: 0,
-      reference: "",
-    });
+      if (!debitAccountObj || !creditAccountObj) {
+        alert("Please select valid debit and credit accounts");
+        return;
+      }
 
-    // Show success message
-    setFormSubmitted(true);
-    setTimeout(() => setFormSubmitted(false), 3000);
+      // Create transaction entries
+      const entries = [
+        {
+          accountId: debitAccountObj.id,
+          accountCode: debitAccountObj.code,
+          accountName: debitAccountObj.name,
+          description: transaction.description,
+          debit: transaction.amount,
+          credit: 0,
+        },
+        {
+          accountId: creditAccountObj.id,
+          accountCode: creditAccountObj.code,
+          accountName: creditAccountObj.name,
+          description: transaction.description,
+          debit: 0,
+          credit: transaction.amount,
+        },
+      ];
+
+      // Save transaction to database
+      const { data, error } = await supabase.functions.invoke(
+        "supabase-functions-accounting-functions",
+        {
+          body: {
+            action: "postTransaction",
+            data: {
+              transaction: {
+                transactionId: transaction.transactionId,
+                date: transaction.date.toISOString(),
+                description: transaction.description,
+                reference: transaction.reference,
+                createdBy: null, // This would be the user ID in a real app
+                status: "Posted",
+              },
+              entries: entries,
+            },
+          },
+        },
+      );
+
+      if (error) throw error;
+
+      console.log("Transaction submitted successfully:", data);
+
+      // Reset form
+      setTransaction({
+        ...transaction,
+        transactionId: generateTransactionId(),
+        description: "",
+        debitAccount: "",
+        creditAccount: "",
+        amount: 0,
+        reference: "",
+      });
+
+      // Show success message
+      setFormSubmitted(true);
+      setTimeout(() => setFormSubmitted(false), 3000);
+    } catch (error) {
+      console.error("Error submitting transaction:", error);
+      alert("Failed to submit transaction. Please try again.");
+    }
   };
 
   // Format currency
@@ -144,6 +309,11 @@ const TransactionEntry = ({
       currency: "IDR",
     }).format(amount);
   };
+
+  // Filter accounts to only show detail accounts (not headers)
+  const detailAccounts = accounts.filter(
+    (account) => account.accountType !== "Header",
+  );
 
   return (
     <div className="min-h-screen bg-gray-50">
@@ -276,7 +446,7 @@ const TransactionEntry = ({
                               <SelectValue placeholder="Pilih akun debit" />
                             </SelectTrigger>
                             <SelectContent>
-                              {accounts.map((account) => (
+                              {detailAccounts.map((account) => (
                                 <SelectItem
                                   key={account.code}
                                   value={account.code}
@@ -300,7 +470,7 @@ const TransactionEntry = ({
                               <SelectValue placeholder="Pilih akun kredit" />
                             </SelectTrigger>
                             <SelectContent>
-                              {accounts.map((account) => (
+                              {detailAccounts.map((account) => (
                                 <SelectItem
                                   key={account.code}
                                   value={account.code}

@@ -9,7 +9,12 @@ import {
   InventorySummary,
   CategorySummary,
 } from "@/types/inventory";
-import { Transaction } from "@/types/accounting";
+import {
+  Transaction,
+  TransactionEntry,
+  TransactionStatus,
+} from "@/types/accounting";
+import { supabase } from "@/lib/supabase";
 
 // Mock data for product categories
 let productCategories: ProductCategory[] = [
@@ -302,12 +307,16 @@ export const getProductCategories = (): ProductCategory[] => {
 };
 
 // Get a product category by ID
-export const getProductCategoryById = (id: string): ProductCategory | undefined => {
+export const getProductCategoryById = (
+  id: string,
+): ProductCategory | undefined => {
   return productCategories.find((category) => category.id === id);
 };
 
 // Add a new product category
-export const addProductCategory = (category: Omit<ProductCategory, "id" | "createdAt" | "updatedAt">): ProductCategory => {
+export const addProductCategory = (
+  category: Omit<ProductCategory, "id" | "createdAt" | "updatedAt">,
+): ProductCategory => {
   const newCategory: ProductCategory = {
     id: `cat${productCategories.length + 1}`,
     ...category,
@@ -319,7 +328,10 @@ export const addProductCategory = (category: Omit<ProductCategory, "id" | "creat
 };
 
 // Update a product category
-export const updateProductCategory = (id: string, category: Partial<ProductCategory>): ProductCategory | undefined => {
+export const updateProductCategory = (
+  id: string,
+  category: Partial<ProductCategory>,
+): ProductCategory | undefined => {
   const index = productCategories.findIndex((c) => c.id === id);
   if (index >= 0) {
     productCategories[index] = {
@@ -335,7 +347,9 @@ export const updateProductCategory = (id: string, category: Partial<ProductCateg
 // Delete a product category
 export const deleteProductCategory = (id: string): boolean => {
   const initialLength = productCategories.length;
-  productCategories = productCategories.filter((category) => category.id !== id);
+  productCategories = productCategories.filter(
+    (category) => category.id !== id,
+  );
   return productCategories.length < initialLength;
 };
 
@@ -350,11 +364,14 @@ export const getProductById = (id: string): Product | undefined => {
 };
 
 // Add a new product
-export const addProduct = (product: Omit<Product, "id" | "createdAt" | "updatedAt">): Product => {
-  const lastId = products.length > 0 ? products[products.length - 1].id : "P000";
+export const addProduct = (
+  product: Omit<Product, "id" | "createdAt" | "updatedAt">,
+): Product => {
+  const lastId =
+    products.length > 0 ? products[products.length - 1].id : "P000";
   const numericPart = parseInt(lastId.substring(1));
   const newId = `P${(numericPart + 1).toString().padStart(3, "0")}`;
-  
+
   const newProduct: Product = {
     id: newId,
     ...product,
@@ -366,7 +383,10 @@ export const addProduct = (product: Omit<Product, "id" | "createdAt" | "updatedA
 };
 
 // Update a product
-export const updateProduct = (id: string, product: Partial<Product>): Product | undefined => {
+export const updateProduct = (
+  id: string,
+  product: Partial<Product>,
+): Product | undefined => {
   const index = products.findIndex((p) => p.id === id);
   if (index >= 0) {
     products[index] = {
@@ -392,14 +412,21 @@ export const getInventoryTransactions = (): InventoryTransaction[] => {
 };
 
 // Get an inventory transaction by ID
-export const getInventoryTransactionById = (id: string): InventoryTransaction | undefined => {
+export const getInventoryTransactionById = (
+  id: string,
+): InventoryTransaction | undefined => {
   return inventoryTransactions.find((transaction) => transaction.id === id);
 };
 
 // Add a new inventory transaction
-export const addInventoryTransaction = (transaction: Omit<InventoryTransaction, "id" | "transactionId" | "createdAt" | "syncedToAccounting">): InventoryTransaction => {
+export const addInventoryTransaction = (
+  transaction: Omit<
+    InventoryTransaction,
+    "id" | "transactionId" | "createdAt" | "syncedToAccounting"
+  >,
+): InventoryTransaction => {
   const transactionId = `INV-${Math.floor(Math.random() * 10000)}-${Date.now().toString().slice(-6)}`;
-  
+
   const newTransaction: InventoryTransaction = {
     id: transactionId,
     transactionId,
@@ -407,47 +434,60 @@ export const addInventoryTransaction = (transaction: Omit<InventoryTransaction, 
     createdAt: new Date(),
     syncedToAccounting: false,
   };
-  
+
   inventoryTransactions.push(newTransaction);
   pendingInventoryTransactions.push(newTransaction);
-  
+
   // Update product stock quantity
-  updateProductStock(transaction.productId, transaction.quantity, transaction.transactionType);
-  
+  updateProductStock(
+    transaction.productId,
+    transaction.quantity,
+    transaction.transactionType,
+  );
+
   // Create stock movement record
   createStockMovement(newTransaction);
-  
+
   return newTransaction;
 };
 
 // Update product stock quantity based on transaction
-const updateProductStock = (productId: string, quantity: number, transactionType: InventoryTransactionType): void => {
+const updateProductStock = (
+  productId: string,
+  quantity: number,
+  transactionType: InventoryTransactionType,
+): void => {
   const productIndex = products.findIndex((p) => p.id === productId);
   if (productIndex >= 0) {
     let stockChange = quantity;
     if (transactionType === "Sale") {
       stockChange = -quantity; // Decrease stock for sales
     }
-    
+
     products[productIndex].stockQuantity += stockChange;
     products[productIndex].updatedAt = new Date();
   }
 };
 
 // Create a stock movement record
-const createStockMovement = (transaction: InventoryTransaction): StockMovement => {
+const createStockMovement = (
+  transaction: InventoryTransaction,
+): StockMovement => {
   const product = getProductById(transaction.productId);
   if (!product) {
     throw new Error(`Product with ID ${transaction.productId} not found`);
   }
-  
+
   let quantityChange = transaction.quantity;
   if (transaction.transactionType === "Sale") {
     quantityChange = -transaction.quantity; // Negative for sales
-  } else if (transaction.transactionType === "Adjustment" && transaction.quantity < 0) {
+  } else if (
+    transaction.transactionType === "Adjustment" &&
+    transaction.quantity < 0
+  ) {
     quantityChange = transaction.quantity; // Can be negative for adjustments
   }
-  
+
   const newStockMovement: StockMovement = {
     id: `SM-${Math.floor(Math.random() * 10000)}`,
     productId: transaction.productId,
@@ -459,7 +499,7 @@ const createStockMovement = (transaction: InventoryTransaction): StockMovement =
     transactionType: transaction.transactionType,
     notes: transaction.notes,
   };
-  
+
   stockMovements.push(newStockMovement);
   return newStockMovement;
 };
@@ -470,7 +510,9 @@ export const getStockMovements = (): StockMovement[] => {
 };
 
 // Get stock movements for a specific product
-export const getStockMovementsByProductId = (productId: string): StockMovement[] => {
+export const getStockMovementsByProductId = (
+  productId: string,
+): StockMovement[] => {
   return stockMovements.filter((movement) => movement.productId === productId);
 };
 
@@ -492,22 +534,20 @@ export const getLowStockAlerts = (): StockAlert[] => {
 export const getInventorySummary = (): InventorySummary => {
   const totalStockValue = products.reduce(
     (sum, product) => sum + product.stockQuantity * product.costPrice,
-    0
+    0,
   );
-  
+
   const currentMonth = new Date().getMonth();
   const currentYear = new Date().getFullYear();
-  
-  const transactionsThisMonth = inventoryTransactions.filter(
-    (transaction) => {
-      const transactionDate = new Date(transaction.date);
-      return (
-        transactionDate.getMonth() === currentMonth &&
-        transactionDate.getFullYear() === currentYear
-      );
-    }
-  ).length;
-  
+
+  const transactionsThisMonth = inventoryTransactions.filter((transaction) => {
+    const transactionDate = new Date(transaction.date);
+    return (
+      transactionDate.getMonth() === currentMonth &&
+      transactionDate.getFullYear() === currentYear
+    );
+  }).length;
+
   return {
     totalProducts: products.length,
     totalCategories: productCategories.length,
@@ -520,24 +560,24 @@ export const getInventorySummary = (): InventorySummary => {
 // Get category summaries
 export const getCategorySummaries = (): CategorySummary[] => {
   const categorySummaries: CategorySummary[] = [];
-  
+
   productCategories.forEach((category) => {
     const categoryProducts = products.filter(
-      (product) => product.categoryId === category.id
+      (product) => product.categoryId === category.id,
     );
-    
+
     const stockValue = categoryProducts.reduce(
       (sum, product) => sum + product.stockQuantity * product.costPrice,
-      0
+      0,
     );
-    
+
     categorySummaries.push({
       categoryName: category.name,
       productCount: categoryProducts.length,
       stockValue,
     });
   });
-  
+
   return categorySummaries;
 };
 
@@ -547,9 +587,11 @@ export const getInventoryAccountMappings = (): InventoryAccountMapping[] => {
 };
 
 // Update account mappings
-export const updateInventoryAccountMapping = (mapping: InventoryAccountMapping): void => {
+export const updateInventoryAccountMapping = (
+  mapping: InventoryAccountMapping,
+): void => {
   const index = defaultAccountMappings.findIndex(
-    (m) => m.transactionType === mapping.transactionType
+    (m) => m.transactionType === mapping.transactionType,
   );
   if (index >= 0) {
     defaultAccountMappings[index] = mapping;
@@ -564,22 +606,26 @@ export const getPendingInventoryTransactions = (): InventoryTransaction[] => {
 };
 
 // Convert inventory transaction to accounting transaction
-export const convertInventoryToAccounting = (inventoryTransaction: InventoryTransaction): Transaction => {
+export const convertInventoryToAccounting = (
+  inventoryTransaction: InventoryTransaction,
+): Transaction => {
   // Find the appropriate account mapping
   const mapping = defaultAccountMappings.find(
-    (m) => m.transactionType === inventoryTransaction.transactionType
+    (m) => m.transactionType === inventoryTransaction.transactionType,
   );
-  
+
   if (!mapping) {
-    throw new Error(`No account mapping found for transaction type: ${inventoryTransaction.transactionType}`);
+    throw new Error(
+      `No account mapping found for transaction type: ${inventoryTransaction.transactionType}`,
+    );
   }
-  
+
   // Generate a transaction ID for accounting
   const accountingTransactionId = `ACC-INV-${inventoryTransaction.id.split("-")[1]}`;
-  
+
   // Create transaction entries based on transaction type
   const entries: any[] = [];
-  
+
   switch (inventoryTransaction.transactionType) {
     case "Purchase":
       // Debit Inventory, Credit Cash/Bank
@@ -603,10 +649,10 @@ export const convertInventoryToAccounting = (inventoryTransaction: InventoryTran
           description: `Pembayaran untuk ${inventoryTransaction.productName}`,
           debit: 0,
           credit: inventoryTransaction.totalAmount,
-        }
+        },
       );
       break;
-      
+
     case "Sale":
       // First entry: Debit Cash/Bank, Credit Revenue
       entries.push(
@@ -629,15 +675,15 @@ export const convertInventoryToAccounting = (inventoryTransaction: InventoryTran
           description: `Penjualan ${inventoryTransaction.productName}`,
           debit: 0,
           credit: inventoryTransaction.totalAmount,
-        }
+        },
       );
-      
+
       // Second entry: Debit COGS, Credit Inventory
       // Calculate COGS based on product cost price
       const product = getProductById(inventoryTransaction.productId);
       if (product) {
         const cogsAmount = product.costPrice * inventoryTransaction.quantity;
-        
+
         entries.push(
           {
             id: `${accountingTransactionId}-3`,
@@ -658,11 +704,154 @@ export const convertInventoryToAccounting = (inventoryTransaction: InventoryTran
             description: `Pengurangan persediaan untuk ${inventoryTransaction.productName}`,
             debit: 0,
             credit: cogsAmount,
-          }
+          },
         );
       }
       break;
-      
+
     case "Adjustment":
       // For positive adjustment: Debit Inventory, Credit Adjustment
-      // For negative adjustment: Debit Adjustment,
+      // For negative adjustment: Debit Adjustment, Credit Inventory
+      if (inventoryTransaction.quantity > 0) {
+        entries.push(
+          {
+            id: `${accountingTransactionId}-1`,
+            transactionId: accountingTransactionId,
+            accountId: mapping.inventoryAccountCode,
+            accountCode: mapping.inventoryAccountCode,
+            accountName: "Persediaan Barang Dagang",
+            description: `Penyesuaian persediaan ${inventoryTransaction.productName}`,
+            debit: inventoryTransaction.totalAmount,
+            credit: 0,
+          },
+          {
+            id: `${accountingTransactionId}-2`,
+            transactionId: accountingTransactionId,
+            accountId: mapping.adjustmentAccountCode,
+            accountCode: mapping.adjustmentAccountCode,
+            accountName: "Penyesuaian Persediaan",
+            description: `Penyesuaian persediaan ${inventoryTransaction.productName}`,
+            debit: 0,
+            credit: inventoryTransaction.totalAmount,
+          },
+        );
+      } else {
+        entries.push(
+          {
+            id: `${accountingTransactionId}-1`,
+            transactionId: accountingTransactionId,
+            accountId: mapping.adjustmentAccountCode,
+            accountCode: mapping.adjustmentAccountCode,
+            accountName: "Penyesuaian Persediaan",
+            description: `Penyesuaian persediaan ${inventoryTransaction.productName}`,
+            debit: Math.abs(inventoryTransaction.totalAmount),
+            credit: 0,
+          },
+          {
+            id: `${accountingTransactionId}-2`,
+            transactionId: accountingTransactionId,
+            accountId: mapping.inventoryAccountCode,
+            accountCode: mapping.inventoryAccountCode,
+            accountName: "Persediaan Barang Dagang",
+            description: `Penyesuaian persediaan ${inventoryTransaction.productName}`,
+            debit: 0,
+            credit: Math.abs(inventoryTransaction.totalAmount),
+          },
+        );
+      }
+      break;
+  }
+
+  // Create the complete transaction
+  return {
+    id: accountingTransactionId,
+    transactionId: accountingTransactionId,
+    date: inventoryTransaction.date,
+    description: `${mapping.description}: ${inventoryTransaction.productName}`,
+    reference: inventoryTransaction.reference || inventoryTransaction.id,
+    entries,
+    createdBy: "System Integration",
+    createdAt: new Date(),
+    updatedAt: new Date(),
+    status: "Posted" as TransactionStatus,
+  };
+};
+
+// Sync inventory transactions to accounting
+export const syncInventoryTransactionsToAccounting = async (): Promise<{
+  success: boolean;
+  syncedCount: number;
+  failedCount: number;
+  errors?: string[];
+}> => {
+  try {
+    const pendingTransactions = getPendingInventoryTransactions();
+
+    if (pendingTransactions.length === 0) {
+      return { success: true, syncedCount: 0, failedCount: 0 };
+    }
+
+    const accountingTransactions: Transaction[] = [];
+    const errors: string[] = [];
+
+    // Convert each pending transaction to an accounting transaction
+    pendingTransactions.forEach((inventoryTx) => {
+      try {
+        const accountingTx = convertInventoryToAccounting(inventoryTx);
+        accountingTransactions.push(accountingTx);
+
+        // Mark as synced
+        const index = pendingInventoryTransactions.findIndex(
+          (t) => t.id === inventoryTx.id,
+        );
+        if (index >= 0) {
+          pendingInventoryTransactions[index].syncedToAccounting = true;
+        }
+
+        // Update the main transactions array
+        const mainIndex = inventoryTransactions.findIndex(
+          (t) => t.id === inventoryTx.id,
+        );
+        if (mainIndex >= 0) {
+          inventoryTransactions[mainIndex].syncedToAccounting = true;
+        }
+      } catch (error) {
+        errors.push(`Failed to sync transaction ${inventoryTx.id}: ${error}`);
+      }
+    });
+
+    // In a real implementation, we would save these transactions to the database
+    // For now, just log them
+    console.log(
+      `Synced ${accountingTransactions.length} transactions to accounting`,
+    );
+
+    return {
+      success: errors.length === 0,
+      syncedCount: accountingTransactions.length,
+      failedCount: errors.length,
+      errors: errors.length > 0 ? errors : undefined,
+    };
+  } catch (error) {
+    console.error("Error syncing inventory transactions to accounting:", error);
+    return {
+      success: false,
+      syncedCount: 0,
+      failedCount: 1,
+      errors: [`Sync failed: ${error}`],
+    };
+  }
+};
+
+// Get sync status
+export const getInventorySyncStatus = (): {
+  pendingCount: number;
+  lastSyncTime: Date | null;
+} => {
+  return {
+    pendingCount: pendingInventoryTransactions.filter(
+      (t) => !t.syncedToAccounting,
+    ).length,
+    lastSyncTime: new Date(), // In a real implementation, this would be stored and retrieved
+  };
+};

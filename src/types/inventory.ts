@@ -122,3 +122,22 @@ export interface InventoryAccountMapping {
   adjustmentAccountCode?: string; // Credit/Debit for Adjustment
   description: string;
 }
+
+// Integration Logs
+export interface IntegrationLog {
+  id: string;
+  transactionId: string;
+  integrationType: string; // e.g., "inventory_to_accounting"
+  status: "success" | "error";
+  errorMessage?: string;
+  createdAt: Date;
+  createdBy: string;
+}
+
+// Sync Status
+export interface SyncStatus {
+  pendingTransactions: number;
+  lastSyncTime: Date | null;
+  syncErrors: number;
+  lastErrorMessage?: string;
+}
