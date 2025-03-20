@@ -76,6 +76,7 @@ const InventoryTransactionEntry = ({
     { id: "P003", name: "Mie Instan", price: 5000 },
     { id: "P004", name: "Air Mineral", price: 5000 },
     { id: "P005", name: "Pulpen", price: 5000 },
+    { id: "P006", name: "Buku", price: 7000 },
   ];
 
   // Recent transactions state
