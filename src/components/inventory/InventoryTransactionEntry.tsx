@@ -305,7 +305,7 @@ const InventoryTransactionEntry = ({
                         }
                       >
                         <SelectTrigger id="product">
-                          <SelectValue placeholder="Pilih produk" />
+                          <SelectValue placeholder="Pilih produk1" />
                         </SelectTrigger>
                         <SelectContent>
                           {productOptions.map((product) => (
